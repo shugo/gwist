@@ -24,7 +24,7 @@ Build from the source on github.
 Usage
 -----
 
-At first, you have to get PIN from Twitter:
+First, you have to get PIN from Twitter:
 
     $ gwist 'hello world in haskell' hello.hs
     visit http://twitter.com/oauth/authorize?oauth_token=...
