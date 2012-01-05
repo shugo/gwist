@@ -45,7 +45,7 @@ oauthParams = OAuth {
 
 getPIN :: String -> IO String
 getPIN url = do
-  putStrLn $ "visit " ++ url ++ " and get PIN."
+  putStrLn $ "visit " ++ url
   putStr "enter PIN: "
   hFlush stdout
   getLine
