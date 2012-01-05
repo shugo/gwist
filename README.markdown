@@ -16,9 +16,9 @@ Build from the source on github.
 
     $ git clone git://github.com/shugo/gwist.git
     $ cd gwist
-    $ vi Gwist/Twitter.hs  # remove the line importing Gwist.Secret, and
-			   # replace Secret.twitterConsumer{Key,Secret} with
-			   # your values
+    $ vi Gwist/Twitter.hs
+    # Remove the line importing Gwist.Secret, and replace
+    # Secret.twitterConsumer{Key,Secret} with your values
     $ ghc --make -O gwist.hs
 
 Usage
