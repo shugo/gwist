@@ -2,6 +2,7 @@
 
 module Gwist.Github (
     Gist (..),
+    GistFile (..),
     createGist
     ) where
 
@@ -9,54 +10,69 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Failure
-import Network.HTTP.Enumerator
-import Network.HTTP.Types
-import qualified Text.JSON as JSON
+import Data.Default
+import Network.HTTP.Conduit
 import Data.Aeson ((.=), (.:))
+import qualified Data.ByteString.Char8 as BS8
+import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Aeson as AE
 import qualified Data.Text as T
-import qualified Gwist.JSON as WJ
+import Gwist.Config
+import qualified Gwist.JSON as JSON
+
+data GistFile = GistFile {
+  gistFilename :: String,
+  gistContent :: LBS.ByteString
+} deriving Show
 
 data Gist = Gist {
-  gistDescription :: String, 
+  gistDescription :: String,
   gistPublic :: Bool,
-  gistFilename :: String,
-  gistContent :: String,
+  gistFiles :: [GistFile],
   gistURL :: String
 } deriving Show
 
+instance Default Gist where
+  def = Gist {
+          gistDescription = "",
+          gistPublic = True,
+          gistFiles = [],
+          gistURL = ""
+        }
+
 instance AE.ToJSON Gist where
-  toJSON (Gist description public filename content url) =
+  toJSON (Gist description public files _) =
     AE.object ["description" .= description,
                "public" .= public,
-               "files" .= AE.object [fname .= file]]
-      where fname = T.pack filename
-            file = AE.object ["content" .= content]
+               "files" .= (AE.object $ map fileToPair files)]
+      where fileToPair (GistFile name content) =
+              T.pack name .= AE.object ["content" .= content]
 
 instance AE.FromJSON Gist where
   parseJSON (AE.Object v) =
-    Gist <$>
-      v .: "description" <*>
-      v .: "public" <*>
-      pure "" <*>
-      pure "" <*>
-      v .: "html_url"
+    (\u -> def { gistURL = u }) <$> v .: "html_url"
 
   parseJSON _ = mzero
 
 endpointURI = "https://api.github.com"
 
-createGist :: String -> String -> String -> IO (Gist)
-createGist desc filename content = do
+optBasicAuth :: Config -> Request a -> Request a
+optBasicAuth Config {githubUser = Just user, githubPassword = Just pass} req =
+  applyBasicAuth (BS8.pack user) (BS8.pack pass) req
+optBasicAuth _ req = req
+
+createGist :: Config -> Gist -> IO (Gist)
+createGist conf gist = do
   req0 <- parseUrl $ endpointURI ++ "/gists"
-  let body = AE.encode $ Gist desc True filename content ""
-  let req = req0 {
-    method = methodPost,
+  let body = AE.encode gist
+  let req = optBasicAuth conf req0 {
+    method = "POST",
     requestHeaders = [("Content-Type", "application/json; charset=\"utf-8\"")],
     requestBody = RequestBodyLBS body
   }
   Response sc _ b <- liftIO $ withManager $ httpLbsRedirect req
-  if 200 <= sc && sc < 300 then
-    WJ.readJSON b
+  if 200 <= sc && sc < 300 then do
+    newGist <- JSON.readJSON b
+    return def { gistURL = gistURL newGist }
   else
     failure $ StatusCodeException sc b
