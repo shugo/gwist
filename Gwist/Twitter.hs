@@ -20,14 +20,13 @@ import qualified Data.ByteString.Lazy.Char8 as LBS8
 import qualified Data.Aeson as AE
 import qualified Data.Text as T
 import Codec.Binary.UTF8.String as UTF8
+import System.IO
 import Gwist.Config
 import qualified Gwist.JSON as JSON
 
 -- to compile yourself, comment out the following line, and
 -- replace Secret.twitterConsumer{Key,Secret} with your values
 import qualified Gwist.Secret as Secret
-
-import System.IO
 
 endpointURI = "https://api.twitter.com"
 
@@ -53,17 +52,16 @@ getPIN url = do
 getTwitterCredential :: IO Credential
 getTwitterCredential = do
   cred <- OA.getTemporaryCredential oauthParams
-  let url = OA.authorizeUrl oauthParams cred
-  pin <- getPIN url
+  pin <- getPIN $ OA.authorizeUrl oauthParams cred
   OA.getAccessToken oauthParams $ OA.insert "oauth_verifier" (BS8.pack pin) cred
 
 postTweet :: Credential -> String -> IO ()
 postTweet cred message = do
-  req0 <- parseUrl $ endpointURI ++ "/1/statuses/update.json"
-  req <- OA.signOAuth oauthParams cred $
-    urlEncodedBody [ ("status", BS8.pack $ UTF8.encodeString message),
-                     ("wrap_links", "true") ] req0
-  Response sc _ b <- liftIO $ withManager $ httpLbsRedirect req
+  req <- OA.signOAuth oauthParams cred =<<
+           urlEncodedBody [ ("status", BS8.pack $ UTF8.encodeString message),
+                            ("wrap_links", "true") ] <$>
+           parseUrl (endpointURI ++ "/1/statuses/update.json")
+  Response sc _ b <- withManager $ httpLbsRedirect req
   if 200 <= sc && sc < 300 then do
     return ()
   else
