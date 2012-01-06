@@ -18,6 +18,7 @@ import Gwist.Github
 import Gwist.Twitter
 
 data Params = Params {
+    config :: Maybe String,
     user :: Maybe String,
     message :: String,
     files :: [FilePath]
@@ -26,13 +27,17 @@ data Params = Params {
 gwistVersion = "0.0"
 
 gwistParams = Params {
-  user = def &= typ "USER" &= help "Github username",
+  config = def &= typFile &= help "Specify config file",
+  user = def &= typ "USER" &= help "Specify Github username",
   message = def &= argPos 0 &= typ "MESSAGE",
   files = def &= args &= typ "FILES"
 } &= program "gwist"
   &= summary ("gwist version " ++ gwistVersion)
 
-configPath = (++ "/.gwistrc") <$> SD.getHomeDirectory
+configPath :: Params -> IO FilePath
+configPath (Params { config = Just file }) = return file
+configPath (Params { config = Nothing }) =
+  (++ "/.gwistrc") <$> SD.getHomeDirectory
 
 askPassword :: IO String
 askPassword = do
@@ -61,15 +66,16 @@ checkTwitterCredential conf =
       cred <- getTwitterCredential
       return conf { twitterCredential = Just cred }
 
-getConfig :: IO Config
-getConfig = (readConfig =<< configPath) `catch` (\e -> return D.def)
+getConfig :: Params -> IO Config
+getConfig params = (readConfig =<< configPath params) `catch`
+                     (\e -> return D.def)
 
 loadConfig :: Params -> IO Config
 loadConfig params =
-  checkGithubUser params =<< checkTwitterCredential =<< getConfig
+  checkGithubUser params =<< checkTwitterCredential =<< getConfig params
 
-saveConfig :: Config -> IO ()
-saveConfig conf = writeConfig conf =<< configPath
+saveConfig :: Params -> Config -> IO ()
+saveConfig params conf = writeConfig conf =<< configPath params
 
 createGistFile :: FilePath -> IO GistFile
 createGistFile filename =
@@ -87,11 +93,11 @@ run = do
          else do
            let g = D.def { gistDescription = desc, gistFiles = gistFiles }
            newG <- createGist conf g
-           putStrLn $ "created a gist at " ++ gistURL newG
+           putStrLn $ "Created a gist at " ++ gistURL newG
            return $ desc ++ " " ++ gistURL newG
   case twitterCredential conf of
     Just cred -> do
       postTweet cred $ msg
-      putStrLn "posted a tweet"
+      putStrLn "Posted a tweet"
     Nothing -> error "Twitter credential not found"
-  saveConfig conf
+  saveConfig params conf
