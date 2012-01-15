@@ -8,7 +8,6 @@ module Gwist.Github (
 
 import Control.Applicative
 import Control.Monad
-import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Exception.Lifted (throwIO)
 import Control.Monad.Base (liftBase)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT, ResourceIO)
@@ -77,7 +76,7 @@ createGist conf gist = do
            parseUrl (endpointURI ++ "/gists")
   Response sc _ b <- liftBase $ withManager $ httpLbsRedirect req
   if 200 <= sc && sc < 300 then do
-    newGist <- liftIO $ JSON.readJSON b
+    newGist <- liftBase $ JSON.readJSON b
     return gist { gistURL = gistURL newGist }
   else
     liftBase $ throwIO $ StatusCodeException sc b
