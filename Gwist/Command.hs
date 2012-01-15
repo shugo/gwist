@@ -5,6 +5,7 @@ module Gwist.Command (
     ) where
 
 import Control.Applicative
+import Control.Monad.Trans.Resource (ResourceT, runResourceT, ResourceIO)
 import qualified Data.Default as D
 import qualified Data.ByteString.Lazy as LBS
 import System.IO
@@ -92,7 +93,7 @@ run = do
            return desc
          else do
            let g = D.def { gistDescription = desc, gistFiles = gistFiles }
-           newG <- createGist conf g
+           newG <- runResourceT $ createGist conf g
            putStrLn $ "Created a gist at " ++ gistURL newG
            return $ desc ++ " " ++ gistURL newG
   case twitterCredential conf of

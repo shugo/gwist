@@ -9,7 +9,9 @@ module Gwist.Github (
 import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Failure
+import Control.Exception.Lifted (throwIO)
+import Control.Monad.Base (liftBase)
+import Control.Monad.Trans.Resource (ResourceT, runResourceT, ResourceIO)
 import Data.Default
 import Network.HTTP.Conduit
 import Data.Aeson ((.=), (.:))
@@ -69,13 +71,13 @@ optBasicAuth Config {githubUser = Just user, githubPassword = Just pass} req =
   applyBasicAuth (BS8.pack user) (BS8.pack pass) req
 optBasicAuth _ req = req
 
-createGist :: Config -> Gist -> IO (Gist)
+createGist :: ResourceIO m => Config -> Gist -> ResourceT m (Gist)
 createGist conf gist = do
-  req <- (optBasicAuth conf) . (setGistBody gist) <$>
+  req <- liftBase $ (optBasicAuth conf) . (setGistBody gist) <$>
            parseUrl (endpointURI ++ "/gists")
-  Response sc _ b <- withManager $ httpLbsRedirect req
+  Response sc _ b <- liftBase $ withManager $ httpLbsRedirect req
   if 200 <= sc && sc < 300 then do
-    newGist <- JSON.readJSON b
-    return def { gistURL = gistURL newGist }
+    newGist <- liftIO $ JSON.readJSON b
+    return gist { gistURL = gistURL newGist }
   else
-    failure $ StatusCodeException sc b
+    liftBase $ throwIO $ StatusCodeException sc b
